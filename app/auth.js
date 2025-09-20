@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Eye, EyeOff, Mail, Lock, User, Phone, MapPin, CheckCircle } from 'lucide-react-native';
+import { Eye, EyeOff, Mail, Lock, User, Phone, MapPin, CircleCheck as CheckCircle } from 'lucide-react-native';
 import { signIn, signUp, sendVerificationEmail, getUserProfile, resetPassword } from '../lib/supabase';
 import { showSuccessToast, showErrorToast, showInfoToast } from '../components/Toast';
 

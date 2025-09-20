@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Lock, Eye, EyeOff, CheckCircle } from 'lucide-react-native';
+import { Lock, Eye, EyeOff, CircleCheck as CheckCircle } from 'lucide-react-native';
 import { updatePassword } from '../lib/supabase';
 import { showSuccessToast, showErrorToast } from '../components/Toast';
 
