@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
-import { User, Mail, Phone, MapPin, Settings, Bell, Shield, LogOut, CreditCard as Edit3, Save, X, Camera, Star, Trophy, Activity } from 'lucide-react-native';
-import { getCurrentUser, getUserProfile, updateUserProfile, signOut, getLeaderboard } from '../../lib/supabase';
+import { User, Mail, Phone, MapPin, Settings, Bell, Shield, LogOut, CreditCard as Edit3, Save, X, Camera, Star, Trophy, Activity, Image as ImageIcon } from 'lucide-react-native';
+import { getCurrentUser, getUserProfile, updateUserProfile, signOut, getLeaderboard, uploadAvatar, updateNotificationSettings } from '../../lib/supabase';
 import { useTranslation } from 'react-i18next';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'react-native';
+import { showSuccessToast, showErrorToast } from '../../components/Toast';
 
 export default function ProfileScreen() {
   const { t } = useTranslation();
@@ -13,6 +16,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -121,6 +125,95 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleAvatarUpload = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setUploadingAvatar(true);
+        const { data, error } = await uploadAvatar(result.assets[0].uri, user.id);
+        
+        if (error) {
+          showErrorToast('Upload Failed', 'Failed to upload avatar');
+          return;
+        }
+
+        showSuccessToast('Success', 'Avatar updated successfully');
+        await loadProfile(); // Reload to get updated avatar
+      }
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      showErrorToast('Error', 'Failed to upload avatar');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setUploadingAvatar(true);
+        const { data, error } = await uploadAvatar(result.assets[0].uri, user.id);
+        
+        if (error) {
+          showErrorToast('Upload Failed', 'Failed to upload avatar');
+          return;
+        }
+
+        showSuccessToast('Success', 'Avatar updated successfully');
+        await loadProfile(); // Reload to get updated avatar
+      }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      showErrorToast('Error', 'Failed to take photo');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const showAvatarOptions = () => {
+    Alert.alert(
+      'Update Avatar',
+      'Choose how to update your profile picture:',
+      [
+        { text: 'Take Photo', onPress: handleTakePhoto },
+        { text: 'Choose from Gallery', onPress: handleAvatarUpload },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleNotificationChange = async (type, value) => {
+    const newSettings = { ...notifications, [type]: value };
+    setNotifications(newSettings);
+
+    try {
+      const { error } = await updateNotificationSettings(user.id, newSettings);
+      if (error) {
+        // Revert on error
+        setNotifications(notifications);
+        showErrorToast('Error', 'Failed to update notification settings');
+        return;
+      }
+      showSuccessToast('Success', 'Notification settings updated');
+    } catch (error) {
+      console.error('Error updating notifications:', error);
+      setNotifications(notifications);
+      showErrorToast('Error', 'Failed to update notification settings');
+    }
+  };
+
   const handleSave = async () => {
     try {
       setSaving(true);
@@ -135,12 +228,12 @@ export default function ProfileScreen() {
       const { error } = await updateUserProfile(user.id, updates);
       if (error) throw error;
 
-      Alert.alert('Success', 'Profile updated successfully');
+      showSuccessToast('Success', 'Profile updated successfully');
       setEditing(false);
       await loadProfile(); // Reload to get updated data
     } catch (error) {
       console.error('Error updating profile:', error);
-      Alert.alert('Error', 'Failed to update profile');
+      showErrorToast('Error', 'Failed to update profile');
     } finally {
       setSaving(false);
     }
@@ -397,7 +490,7 @@ export default function ProfileScreen() {
           </View>
           <Switch
             value={notifications.email}
-            onValueChange={(value) => setNotifications({ ...notifications, email: value })}
+            onValueChange={(value) => handleNotificationChange('email', value)}
             trackColor={{ false: '#E5E7EB', true: '#BFDBFE' }}
             thumbColor={notifications.email ? '#1E40AF' : '#9CA3AF'}
           />
@@ -413,7 +506,7 @@ export default function ProfileScreen() {
           </View>
           <Switch
             value={notifications.push}
-            onValueChange={(value) => setNotifications({ ...notifications, push: value })}
+            onValueChange={(value) => handleNotificationChange('push', value)}
             trackColor={{ false: '#E5E7EB', true: '#BBF7D0' }}
             thumbColor={notifications.push ? '#10B981' : '#9CA3AF'}
           />
@@ -429,7 +522,7 @@ export default function ProfileScreen() {
           </View>
           <Switch
             value={notifications.sms}
-            onValueChange={(value) => setNotifications({ ...notifications, sms: value })}
+            onValueChange={(value) => handleNotificationChange('sms', value)}
             trackColor={{ false: '#E5E7EB', true: '#FDE68A' }}
             thumbColor={notifications.sms ? '#F59E0B' : '#9CA3AF'}
           />
@@ -462,12 +555,24 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={[styles.saveButton, saving && styles.saveButtonDisabled]}
             onPress={handleSave}
-            disabled={saving}
-          >
-            <Save size={20} color="#FFFFFF" />
+            {profile?.avatar_url ? (
+              <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>
+                {profile?.first_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
+              </Text>
+            )}
             <Text style={styles.saveButtonText}>
-              {saving ? 'Saving...' : 'Save Changes'}
-            </Text>
+          <TouchableOpacity 
+            style={[styles.cameraButton, uploadingAvatar && styles.cameraButtonDisabled]} 
+            onPress={showAvatarOptions}
+            disabled={uploadingAvatar}
+          >
+            {uploadingAvatar ? (
+              <Activity size={16} color="#FFFFFF" />
+            ) : (
+              <Camera size={16} color="#FFFFFF" />
+            )}
           </TouchableOpacity>
         </View>
       )}
@@ -529,6 +634,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textTransform: 'uppercase',
   },
+  avatarImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+  },
   cameraButton: {
     position: 'absolute',
     bottom: -2,
@@ -541,6 +651,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
+  },
+  cameraButtonDisabled: {
+    opacity: 0.6,
   },
   userInfo: {
     flex: 1,

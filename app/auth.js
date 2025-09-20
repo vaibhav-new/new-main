@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Eye, EyeOff, Mail, Lock, User, Phone, MapPin, CheckCircle } from 'lucide-react-native';
-import { signIn, signUp, sendVerificationEmail, getUserProfile } from '../lib/supabase';
+import { signIn, signUp, sendVerificationEmail, getUserProfile, resetPassword } from '../lib/supabase';
+import { showSuccessToast, showErrorToast, showInfoToast } from '../components/Toast';
 
 export default function AuthScreen() {
   const [isLogin, setIsLogin] = useState(true);
@@ -11,6 +12,9 @@ export default function AuthScreen() {
   const [currentStep, setCurrentStep] = useState(1);
   const [verificationSent, setVerificationSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -83,13 +87,13 @@ export default function AuthScreen() {
 
         if (result.error) {
           console.error('Sign in error:', result.error);
-          Alert.alert('Authentication Error', result.error.message || 'Failed to sign in');
+          showErrorToast('Authentication Error', result.error.message || 'Failed to sign in');
           setLoading(false);
           return;
         }
 
         if (!result.user) {
-          Alert.alert('Error', 'No user returned from authentication');
+          showErrorToast('Error', 'No user returned from authentication');
           setLoading(false);
           return;
         }
@@ -134,12 +138,12 @@ export default function AuthScreen() {
           return;
         }
         if (formData.password !== formData.confirmPassword) {
-          Alert.alert('Error', 'Passwords do not match');
+          showErrorToast('Validation Error', 'Passwords do not match');
           setLoading(false);
           return;
         }
         if (formData.password.length < 6) {
-          Alert.alert('Error', 'Password must be at least 6 characters long');
+          showErrorToast('Validation Error', 'Password must be at least 6 characters long');
           setLoading(false);
           return;
         }
@@ -177,7 +181,7 @@ export default function AuthScreen() {
             errorMessage = 'Password must be at least 6 characters long.';
           }
 
-          Alert.alert('Registration Error', errorMessage);
+          showErrorToast('Registration Error', errorMessage);
           setLoading(false);
           return;
         }
@@ -185,27 +189,58 @@ export default function AuthScreen() {
         console.log('Account created successfully');
         setVerificationSent(true);
 
-        Alert.alert(
+        showSuccessToast(
           'Account Created Successfully!',
-          `Welcome to जनConnect! Please check your email (${formData.email}) and click the verification link to activate your account. You can then sign in.`,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                setIsLogin(true);
-                setCurrentStep(1);
-                setVerificationSent(false);
-                resetForm();
-              },
-            },
-          ]
+          `Welcome to जनConnect! Please check your email (${formData.email}) and click the verification link to activate your account.`
         );
+
+        // Auto switch to login after 3 seconds
+        setTimeout(() => {
+          setIsLogin(true);
+          setCurrentStep(1);
+          setVerificationSent(false);
+          resetForm();
+        }, 3000);
       }
     } catch (error) {
       console.error('Auth error:', error);
-      Alert.alert('Error', error.message || 'An unexpected error occurred');
+      showErrorToast('Error', error.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!resetEmail?.trim()) {
+      showErrorToast('Validation Error', 'Please enter your email address');
+      return;
+    }
+
+    if (!isValidEmail(resetEmail)) {
+      showErrorToast('Validation Error', 'Please enter a valid email address');
+      return;
+    }
+
+    try {
+      setResetLoading(true);
+      const { error } = await resetPassword(resetEmail.trim());
+      
+      if (error) {
+        showErrorToast('Reset Error', error.message || 'Failed to send reset email');
+        return;
+      }
+
+      showSuccessToast(
+        'Reset Email Sent',
+        `Password reset instructions have been sent to ${resetEmail}`
+      );
+      setShowForgotPassword(false);
+      setResetEmail('');
+    } catch (error) {
+      console.error('Password reset error:', error);
+      showErrorToast('Error', 'Failed to send password reset email');
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -254,12 +289,12 @@ export default function AuthScreen() {
       const result = await sendVerificationEmail(formData.email);
 
       if (result.error) {
-        Alert.alert('Error', result.error.message || 'Failed to send verification email');
+        showErrorToast('Error', result.error.message || 'Failed to send verification email');
       } else {
-        Alert.alert('Success', 'Verification email sent! Please check your inbox.');
+        showSuccessToast('Success', 'Verification email sent! Please check your inbox.');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to send verification email');
+      showErrorToast('Error', 'Failed to send verification email');
     } finally {
       setLoading(false);
     }
@@ -517,6 +552,15 @@ export default function AuthScreen() {
                 </TouchableOpacity>
               </View>
 
+              {isLogin && (
+                <TouchableOpacity 
+                  style={styles.forgotPasswordButton} 
+                  onPress={() => setShowForgotPassword(true)}
+                >
+                  <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                </TouchableOpacity>
+              )}
+
               {!isLogin && (
                 <>
                   <View style={styles.inputContainer}>
@@ -607,6 +651,51 @@ export default function AuthScreen() {
             </View>
           )}
         </View>
+
+        {/* Forgot Password Modal */}
+        <Modal visible={showForgotPassword} transparent animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Reset Password</Text>
+              <Text style={styles.modalSubtitle}>
+                Enter your email address and we'll send you a link to reset your password.
+              </Text>
+
+              <View style={styles.inputContainer}>
+                <Mail size={20} color="#6B7280" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your email"
+                  value={resetEmail}
+                  onChangeText={setResetEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => {
+                    setShowForgotPassword(false);
+                    setResetEmail('');
+                  }}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalSubmitButton, resetLoading && styles.modalSubmitButtonDisabled]}
+                  onPress={handleForgotPassword}
+                  disabled={resetLoading}
+                >
+                  <Text style={styles.modalSubmitText}>
+                    {resetLoading ? 'Sending...' : 'Send Reset Link'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -868,5 +957,74 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 18,
+  },
+  forgotPasswordButton: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  forgotPasswordText: {
+    fontSize: 14,
+    color: '#1E40AF',
+    fontWeight: '500',
+    textDecorationLine: 'underline',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#E5E7EB',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: '#374151',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalSubmitButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#1E40AF',
+    alignItems: 'center',
+  },
+  modalSubmitButtonDisabled: {
+    opacity: 0.6,
+  },
+  modalSubmitText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

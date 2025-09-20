@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Modal } fro
 import { MessageSquare, Send, X } from 'lucide-react-native';
 import { createFeedback, getCurrentUser } from '../lib/supabase';
 import { useTranslation } from 'react-i18next';
+import { showSuccessToast, showErrorToast } from './Toast';
 
 export default function FeedbackForm({ visible, onClose, issueId = null }) {
   const { t } = useTranslation();
@@ -24,7 +25,7 @@ export default function FeedbackForm({ visible, onClose, issueId = null }) {
 
   const handleSubmit = async () => {
     if (!formData.subject || !formData.message) {
-      Alert.alert(t('common.error'), 'Please fill in all required fields');
+      showErrorToast('Validation Error', 'Please fill in all required fields');
       return;
     }
 
@@ -48,26 +49,24 @@ export default function FeedbackForm({ visible, onClose, issueId = null }) {
       const { error } = await createFeedback(feedbackData);
       if (error) throw error;
 
-      Alert.alert(
-        t('common.success'),
-        'Your feedback has been submitted successfully! We will review it and respond if necessary. You can track the status in your feedback history.',
-        [{ 
-          text: t('common.ok'), 
-          onPress: () => {
-            setFormData({
-              type: 'complaint',
-              subject: '',
-              message: '',
-              contactEmail: '',
-              contactPhone: '',
-            });
-            onClose();
-          }
-        }]
+      showSuccessToast(
+        'Feedback Submitted',
+        'Your feedback has been submitted successfully! We will review it and respond if necessary.'
       );
+
+      // Reset form and close
+      setFormData({
+        type: 'complaint',
+        subject: '',
+        message: '',
+        contactEmail: '',
+        contactPhone: '',
+      });
+      onClose();
+
     } catch (error) {
       console.error('Error submitting feedback:', error);
-      Alert.alert(t('common.error'), 'Failed to submit feedback: ' + error.message);
+      showErrorToast('Submission Error', 'Failed to submit feedback: ' + error.message);
     } finally {
       setLoading(false);
     }

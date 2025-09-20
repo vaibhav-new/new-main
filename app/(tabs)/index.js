@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshControl, Alert } from 'react-native';
 import { Bell, MapPin, Users, TrendingUp, CircleCheck as CheckCircle, Trophy, MessageSquare, Star, Activity } from 'lucide-react-native';
-import { getCurrentUser, getUserProfile, getIssues, getPosts, getTenders, getUserBids, getUserNotifications, getLeaderboard } from '../../lib/supabase';
+import { getCurrentUser, getUserProfile, getIssues, getPosts, getTenders, getUserBids, getUserNotifications, getLeaderboard, getUserIssues } from '../../lib/supabase';
 import { useTranslation } from 'react-i18next';
+import { useRouter } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -308,7 +310,7 @@ export default function HomeScreen() {
       <View style={styles.activitySection}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/user-reports')}>
             <Text style={styles.seeAllText}>See All</Text>
           </TouchableOpacity>
         </View>
